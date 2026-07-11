@@ -1,0 +1,6 @@
+__pycache__/
+.agents/
+.vscode/
+papers/
+tmp/
+weights/
