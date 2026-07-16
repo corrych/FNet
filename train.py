@@ -16,8 +16,8 @@ _METRIC_KEYS = ("tp", "fp", "fn", "tn")
 @dataclass
 class TrainConfig:
     epochs: int = 80
-    lr: float = 5e-5
-    min_lr: float = 4e-5
+    lr: float = 6e-5
+    min_lr: float = 5e-5
 
     encoder_checkpoint: str | None = "weights/tu-caformer_s36_imagenet_encoder.pth"
     save_path: str = "checkpoints/testmodel.pth"
@@ -175,6 +175,11 @@ def train(model, train_loader, test_loader, cfg, device):
 
 if __name__ == "__main__":
     cfg = TrainConfig()
+    # cfg = TrainConfig(
+    #     epochs=80,
+    #     resume_path="checkpoints/testmodel.pth",
+    #     resume_optimizer=True,
+    # )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = FNet(encoder_checkpoint=cfg.encoder_checkpoint).to(device)

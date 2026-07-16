@@ -60,20 +60,41 @@ class PN(nn.Module):
         return out
 
 
-class PredictionHead(nn.Sequential):
-    def __init__(self, in_channels, out_channels, kernel_size=3, upsampling=1):
-        conv2d = nn.Conv2d(
-            in_channels,
+class PredictionHead(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        fused_channels,
+        out_channels,
+        kernel_size=3,
+        feature_upsampling_scale=2,
+        output_upsampling_scale=1,
+    ):
+        super().__init__()
+        self.fuse_s1 = ConvBnAct(in_channels, fused_channels, 3, 1, 1)
+        self.feature_upsampling = (
+            nn.UpsamplingBilinear2d(scale_factor=feature_upsampling_scale)
+            if feature_upsampling_scale > 1
+            else nn.Identity()
+        )
+        self.conv2d = nn.Conv2d(
+            fused_channels,
             out_channels,
             kernel_size=kernel_size,
             padding=kernel_size // 2,
         )
-        upsampling = (
-            nn.UpsamplingBilinear2d(scale_factor=upsampling)
-            if upsampling > 1
+        self.output_upsampling = (
+            nn.UpsamplingBilinear2d(scale_factor=output_upsampling_scale)
+            if output_upsampling_scale > 1
             else nn.Identity()
         )
-        super().__init__(conv2d, upsampling)
+
+    def forward(self, x):
+        x = self.fuse_s1(x)
+        x = self.feature_upsampling(x)
+        x = self.conv2d(x)
+        x = self.output_upsampling(x)
+        return x
 
 
 class OcclusionAwarePNBranch(nn.Module):
@@ -90,21 +111,18 @@ class OcclusionAwarePNBranch(nn.Module):
         self.layer3 = PN(320, 512, 2, 256)
 
         self.layer2_1 = PN(128, 256, 2, 128)
-        self.layer2_2 = PN(128, 512, 4, 256)
+        self.layer2_2 = PN(128, 512, 4, 128)
 
-        self.layer1_1 = PN(64, 256, 2, 64)
+        self.layer1_1 = PN(64, 128, 2, 64)
         self.layer1_2 = PN(64, 256, 4, 64)
 
-
-        
-        self.fuse_s1 = ConvBnAct(64 * 2, 64, 3, 1, 1)
-
-        self.upscale = nn.UpsamplingBilinear2d(scale_factor=2)
         self.head = PredictionHead(
             in_channels=64,
+            fused_channels=32,
             out_channels=out_channels,
             kernel_size=3,
-            upsampling=2,
+            feature_upsampling_scale=2,
+            output_upsampling_scale=2,
         )
 
     def forward(self, s1, s2, s3, s4):
@@ -117,9 +135,8 @@ class OcclusionAwarePNBranch(nn.Module):
         x1_1 = self.layer1_1(s1,x2_2)
         x1_2 = self.layer1_2(x1_1,x3)
 
-        o1 = self.fuse_s1(torch.cat([x1_1, x1_2], dim=1))
-        feature = self.upscale(o1)
-        logits = self.head(feature)
+        #feature = torch.cat([x1_1, x1_2], dim=1)
+        logits = self.head(x1_2)
         return logits
 
 
